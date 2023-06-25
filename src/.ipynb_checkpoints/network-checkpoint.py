@@ -121,7 +121,8 @@ class Network(object):
         return (nabla_b, nabla_w)
 
     def evaluate(self, test_data):
-        """Return the total accuracy and accuracy by class. Note that the neural
+        """Return the number of test inputs for which the neural
+        network outputs the correct result by class. Note that the neural
         network's output is assumed to be the index of whichever
         neuron in the final layer has the highest activation."""
         test_results = [(np.argmax(self.feedforward(x)), y)
@@ -132,6 +133,7 @@ class Network(object):
                 classes[y] = (classes[y][0]+int(x == y), classes[y][1]+1)
                 continue
             classes[y] = (int(x == y), 1)
+            
         
         return (sum(int(x == y) for (x, y) in test_results), len(test_data)), classes
 
