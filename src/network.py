@@ -51,6 +51,10 @@ class Network(object):
         network will be evaluated against the test data after each
         epoch, and partial progress printed out.  This is useful for
         tracking progress, but slows things down substantially."""
+
+        max_acc = []
+        max_recall = []
+        
         if test_data: n_test = len(test_data)
         n = len(training_data)
         for j in range(epochs):
@@ -61,13 +65,24 @@ class Network(object):
             for mini_batch in mini_batches:
                 self.update_mini_batch(mini_batch, eta)
             if test_data:
-                total_evaluation, by_class_evaluation = self.evaluate(test_data)
+                total_evaluation, by_class_evaluation, recall_by_class = self.evaluate(test_data)
+
+                print(total_evaluation, by_class_evaluation, recall_by_class)
+
                 print("Epoch {0}:".format(j))
                 print("    Total accuracy: {0}".format(total_evaluation[0]/total_evaluation[1]))
                 for c,e in by_class_evaluation.items():
-                    print("    Class {0} accuracy: {1}".format(c, e[0]/e[1]))
+                    print("     Class {0} accuracy: {1}".format(c, e[0]/e[1]))
+
+                    max_acc.append(e[0]/e[1])
+                    max_recall.append(recall_by_class[c])
+ 
             else:
                 print("Epoch {0} complete".format(j))
+
+        print("Average accuracy: {0}".format(sum(max_acc)/len(max_acc)))
+        print("Average recall: {0}".format(sum(max_recall)/len(max_recall)))
+        
 
     def update_mini_batch(self, mini_batch, eta):
         """Update the network's weights and biases by applying
@@ -132,8 +147,15 @@ class Network(object):
                 classes[y] = (classes[y][0]+int(x == y), classes[y][1]+1)
                 continue
             classes[y] = (int(x == y), 1)
+
+        recall_by_class = {}
+        for c, (tp, total) in classes.items():
+            fn = total - tp
+            recall = tp / (tp + fn) if (tp + fn) != 0 else 0.0
+            recall_by_class[c] = recall
+
         
-        return (sum(int(x == y) for (x, y) in test_results), len(test_data)), classes
+        return (sum(int(x == y) for (x, y) in test_results), len(test_data)), classes, recall_by_class
 
     def cost_derivative(self, output_activations, y):
         """Return the vector of partial derivatives \partial C_x /
