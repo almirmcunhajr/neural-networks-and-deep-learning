@@ -73,16 +73,12 @@ class Network(object):
                 print("    Total accuracy: {0}".format(total_evaluation[0]/total_evaluation[1]))
                 for c,e in by_class_evaluation.items():
                     print("     Class {0} accuracy: {1}".format(c, e[0]/e[1]))
-                    print("     Class {0} recall: {1}".format(c, recall_by_class[c]))
 
                     max_acc.append(e[0]/e[1])
                     max_recall.append(recall_by_class[c])
  
             else:
                 print("Epoch {0} complete".format(j))
-                
-        print("Max accuracy: {0}".format(max(max_acc)))
-        print("Max recall: {0}".format(max(max_recall)))
 
         print("Average accuracy: {0}".format(sum(max_acc)/len(max_acc)))
         print("Average recall: {0}".format(sum(max_recall)/len(max_recall)))
