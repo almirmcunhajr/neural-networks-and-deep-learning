@@ -51,10 +51,11 @@ class Network(object):
         network will be evaluated against the test data after each
         epoch, and partial progress printed out.  This is useful for
         tracking progress, but slows things down substantially."""
-
-        max_acc = []
-        max_recall = []
         
+        total_accurancy_series = []
+        total_precision_series = []
+        total_recal_series = []
+       
         if test_data: n_test = len(test_data)
         n = len(training_data)
         for j in range(epochs):
@@ -65,24 +66,31 @@ class Network(object):
             for mini_batch in mini_batches:
                 self.update_mini_batch(mini_batch, eta)
             if test_data:
-                total_evaluation, by_class_evaluation, recall_by_class = self.evaluate(test_data)
-
-                print(total_evaluation, by_class_evaluation, recall_by_class)
-
-                print("Epoch {0}:".format(j))
-                print("    Total accuracy: {0}".format(total_evaluation[0]/total_evaluation[1]))
-                for c,e in by_class_evaluation.items():
-                    print("     Class {0} accuracy: {1}".format(c, e[0]/e[1]))
-
-                    max_acc.append(e[0]/e[1])
-                    max_recall.append(recall_by_class[c])
- 
+                total_accuracy, accuracy_by_class, precision, recall = self.calculate_metrics(test_data)
+                total_precision = np.mean(list(precision.values()))
+                total_recall = np.mean(list(recall.values()))
+                
+                total_accurancy_series += [total_accuracy]
+                total_precision_series += [total_precision]
+                total_recal_series += [total_recall]
+                
+                print(f"Epoch {j}:")
+                print("    Accuracy by Class:")
+                for cls, accuracy in accuracy_by_class.items():
+                    print(f"        Class {cls}: {accuracy}")
+                print("    Precision:")
+                for cls, precision_value in precision.items():
+                    print(f"        Class {cls}: {precision_value}")
+                print("    Recall:")
+                for cls, recall_value in recall.items():
+                    print(f"        Class {cls}: {recall_value}")                
+                print(f"    Total Accuracy: {total_accuracy}")
+                print(f"    Total Precision: {np.mean(list(precision.values()))}")
+                print(f"    Total Recall: {np.mean(list(recall.values()))}")
             else:
-                print("Epoch {0} complete".format(j))
-
-        print("Average accuracy: {0}".format(sum(max_acc)/len(max_acc)))
-        print("Average recall: {0}".format(sum(max_recall)/len(max_recall)))
+                print("Epoch {0} complete".format(j))        
         
+        return np.array(total_accurancy_series), np.array(total_precision_series), np.array(total_recal_series)
 
     def update_mini_batch(self, mini_batch, eta):
         """Update the network's weights and biases by applying
@@ -136,26 +144,64 @@ class Network(object):
         return (nabla_b, nabla_w)
 
     def evaluate(self, test_data):
-        """Return the total accuracy and accuracy by class. Note that the neural
-        network's output is assumed to be the index of whichever
-        neuron in the final layer has the highest activation."""
-        test_results = [(np.argmax(self.feedforward(x)), y)
-                        for (x, y) in test_data]
-        classes = {}
-        for x, y in test_results:
-            if y in classes:
-                classes[y] = (classes[y][0]+int(x == y), classes[y][1]+1)
-                continue
-            classes[y] = (int(x == y), 1)
+        """
+        Return a list of tuples containing the predicted and actual
+        class labels for each test input in the given test data.
+        """
+        test_results = [(np.argmax(self.feedforward(x)), y) for (x, y) in test_data]
+        return test_results
 
-        recall_by_class = {}
-        for c, (tp, total) in classes.items():
-            fn = total - tp
-            recall = tp / (tp + fn) if (tp + fn) != 0 else 0.0
-            recall_by_class[c] = recall
+    def calculate_metrics(self, test_data):
+        """
+        Calculate accuracy by class, precision, and recall for the given test data.
+        """
+        results = self.evaluate(test_data)
+        class_counts = {}
+        class_correct = {}
+        true_positives = {}
+        false_positives = {}
+        false_negatives = {}
 
-        
-        return (sum(int(x == y) for (x, y) in test_results), len(test_data)), classes, recall_by_class
+        for predicted, actual in results:
+            if actual not in class_counts:
+                class_counts[actual] = 0
+                class_correct[actual] = 0
+                true_positives[actual] = 0
+                false_positives[actual] = 0
+                false_negatives[actual] = 0
+            if predicted not in false_positives:
+                false_positives[predicted] = 0
+
+            class_counts[actual] += 1
+            if predicted == actual:
+                class_correct[actual] += 1
+                true_positives[actual] += 1
+            else:
+                false_positives[predicted] += 1
+                false_negatives[actual] += 1
+
+        total_accuracy = sum(predicted == actual for predicted, actual in results) / len(results)
+
+        accuracy_by_class = {
+            cls: class_correct[cls] / class_counts[cls] if class_counts[cls] > 0 else 0.0
+            for cls in class_counts
+        }
+
+        precision = {
+            cls: true_positives[cls] / (true_positives[cls] + false_positives[cls])
+            if (true_positives[cls] + false_positives[cls]) > 0
+            else 0.0
+            for cls in class_counts
+        }
+
+        recall = {
+            cls: true_positives[cls] / (true_positives[cls] + false_negatives[cls])
+            if (true_positives[cls] + false_negatives[cls]) > 0
+            else 0.0
+            for cls in class_counts
+        }
+
+        return total_accuracy, accuracy_by_class, precision, recall
 
     def cost_derivative(self, output_activations, y):
         """Return the vector of partial derivatives \partial C_x /
