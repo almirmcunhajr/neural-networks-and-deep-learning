@@ -50,6 +50,7 @@ def ReLU(z): return T.maximum(0.0, z)
 from theano.tensor.nnet import sigmoid
 from theano.tensor import tanh
 
+import matplotlib.pyplot as plt
 
 #### Constants
 GPU = True
@@ -158,9 +159,14 @@ class Network(object):
                 self.x:
                 test_x[i*self.mini_batch_size: (i+1)*self.mini_batch_size]
             })
+        
+        total_accurancy_series = []
+        total_precision_series = []
+        total_recal_series = []
         # Do the actual training
         best_validation_accuracy = 0.0
         for epoch in range(epochs):
+            print(f"Epoch {epoch}:")
             for minibatch_index in range(num_training_batches):
                 iteration = num_training_batches*epoch+minibatch_index
                 if iteration % 1000 == 0:
@@ -180,10 +186,89 @@ class Network(object):
                                 [test_mb_accuracy(j) for j in range(num_test_batches)])
                             print('The corresponding test accuracy is {0:.2%}'.format(
                                 test_accuracy))
+            if test_data:
+                test_predictions = np.concatenate([self.test_mb_predictions(j) for j in range(num_test_batches)], axis=0)
+                total_accuracy, accuracy_by_class, precision, recall = self.calculate_metrics(test_data, test_predictions)
+                total_precision = np.mean(list(precision.values()))
+                total_recall = np.mean(list(recall.values()))
+                
+                total_accurancy_series += [total_accuracy]
+                total_precision_series += [total_precision]
+                total_recal_series += [total_recall]
+                
+                print("Accuracy by Class:")
+                for cls, accuracy in accuracy_by_class.items():
+                    print(f"    Class {cls}: {accuracy}")
+                print("Precision:")
+                for cls, precision_value in precision.items():
+                    print(f"    Class {cls}: {precision_value}")
+                print("Recall:")
+                for cls, recall_value in recall.items():
+                    print(f"    Class {cls}: {recall_value}")                
+                print(f"Total Accuracy: {total_accuracy}")
+                print(f"Total Precision: {np.mean(list(precision.values()))}")
+                print(f"Total Recall: {np.mean(list(recall.values()))}")
+
         print("Finished training network.")
         print("Best validation accuracy of {0:.2%} obtained at iteration {1}".format(
             best_validation_accuracy, best_iteration))
         print("Corresponding test accuracy of {0:.2%}".format(test_accuracy))
+
+        return np.array(total_accurancy_series), np.array(total_precision_series), np.array(total_recal_series)
+    
+    def calculate_metrics(self, test_data, test_predictions):
+        """
+        Calculate accuracy by class, precision, and recall for the given test data.
+        """
+        _, test_y = test_data
+        test_y = test_y.eval()
+        class_counts = {}
+        class_correct = {}
+        true_positives = {}
+        false_positives = {}
+        false_negatives = {}
+
+        for predicted, actual in zip(test_predictions, test_y):
+            if actual not in class_counts:
+                class_counts[actual] = 0
+                class_correct[actual] = 0
+                true_positives[actual] = 0
+                false_positives[actual] = 0
+                false_negatives[actual] = 0
+            if predicted not in false_positives:
+                false_positives[predicted] = 0
+
+            class_counts[actual] += 1
+            if predicted == actual:
+                class_correct[actual] += 1
+                true_positives[actual] += 1
+            else:
+                false_positives[predicted] += 1
+                false_negatives[actual] += 1
+
+        total_accuracy = sum(predicted == actual for predicted, actual in zip(test_predictions, test_y)) / len(
+            test_predictions)
+
+        accuracy_by_class = {
+            cls: class_correct[cls] / class_counts[cls] if class_counts[cls] > 0 else 0.0
+            for cls in class_counts
+        }
+
+        precision = {
+            cls: true_positives[cls] / (true_positives[cls] + false_positives[cls])
+            if (true_positives[cls] + false_positives[cls]) > 0
+            else 0.0
+            for cls in class_counts
+        }
+
+        recall = {
+            cls: true_positives[cls] / (true_positives[cls] + false_negatives[cls])
+            if (true_positives[cls] + false_negatives[cls]) > 0
+            else 0.0
+            for cls in class_counts
+        }
+
+        return total_accuracy, accuracy_by_class, precision, recall
 
 #### Define layer types
 
